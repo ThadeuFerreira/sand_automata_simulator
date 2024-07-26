@@ -19,7 +19,8 @@ Grid :: struct {
     width, height: int,
     offset_pos: rl.Vector2,
     blockSize: f32,
-    cells: [][]Cell,
+    current_cells: []Cell,
+    previous_cells: []Cell,
 
     backgroundColor: rl.Color,
     fall_speed: f32,
@@ -48,13 +49,16 @@ Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f
         backgroundColor = backgroundColor,
     }
 
-    cells := make([][]Cell, width)
-    for i in 0..< width {
-        cells[i] = make([]Cell, height)
-    }
+    current_cells := make([]Cell, width*height)
+    previous_cells := make([]Cell, width*height)
+    // for i in 0..< width {
+    //     current_cells[i] = make([]Cell, height)
+    //     previous_cells[i] = make([]Cell, height)
+    // }
     g.fall_speed = fall_speed
 
-    g.cells = cells
+    g.current_cells = current_cells
+    g.previous_cells = previous_cells
     return g
 }
 
@@ -92,7 +96,7 @@ get_input :: proc(g : ^Grid) {
                 cell_type = CELL_TYPE.SAND,
                 color = new_sand_color,
             }
-            g.cells[x][y] = new_cell
+            g.previous_cells[x + y*g.width] = new_cell
         }
     }
     if rl.IsMouseButtonDown(rl.MouseButton.RIGHT) {
@@ -103,104 +107,106 @@ get_input :: proc(g : ^Grid) {
                 cell_type = CELL_TYPE.WATER,
                 color = rl.BLUE,
             }
-            g.cells[x][y] = new_cell
+            g.previous_cells[x + y*g.width] = new_cell
         }
     }
 }
 
-drop_water :: proc(g: ^Grid, new_cells : [][]Cell, cell : Cell, i,j :int){
-    if j + 1 < g.height {
-        if g.cells[i][j+1].cell_type == CELL_TYPE.EMPTY {
-            new_cells[i][j] = Cell{
+drop_water :: proc(g: ^Grid, cell : Cell, i,j :int){
+    h := g.height
+    w := g.width
+    if j + 1 < h{
+        if g.previous_cells[i + (j+1)*w].cell_type == CELL_TYPE.EMPTY {
+            g.current_cells[i + j*w] = Cell{
                 cell_type = CELL_TYPE.EMPTY,
                 color = rl.BLACK,
             }
-            new_cells[i][j+1] = Cell{
+            g.current_cells[i + (j+1)*w] = Cell{
                 cell_type = cell.cell_type,
                 color = cell.color,
             }
         }
-        else if g.cells[i-1][j+1].cell_type == CELL_TYPE.EMPTY && g.cells[i+1][j+1].cell_type == CELL_TYPE.EMPTY{
-               if rand.float32() < 0.5 && new_cells[i-1][j].cell_type == CELL_TYPE.EMPTY {
-                   new_cells[i][j] = Cell{
+        else if g.previous_cells[(i -1) + (j+1)*w].cell_type == CELL_TYPE.EMPTY && g.previous_cells[(i +1) + (j+1)*w].cell_type == CELL_TYPE.EMPTY{
+               if rand.float32() < 0.5 && g.current_cells[(i-1) + j*w].cell_type == CELL_TYPE.EMPTY {
+                   g.current_cells[i + j*w] = Cell{
                        cell_type = CELL_TYPE.EMPTY,
                        color = rl.BLACK,
                    }
-                   new_cells[i-1][j+1] = Cell{
+                   g.current_cells[(i-1) +( j+1)*w] = Cell{
                        cell_type = cell.cell_type,
                        color = cell.color,
                    }
-               } else if new_cells[i+1][j].cell_type == CELL_TYPE.EMPTY {
-                   new_cells[i][j] = Cell{
+               } else if g.current_cells[(i+1) + j*w].cell_type == CELL_TYPE.EMPTY {
+                   g.current_cells[i + j*w] = Cell{
                        cell_type = CELL_TYPE.EMPTY,
                        color = rl.BLACK,
                    }
-                   new_cells[i+1][j+1] = Cell{
+                   g.current_cells[(i+1) + (j+1)*w] = Cell{
                        cell_type = cell.cell_type,
                        color = cell.color,
                    }
                }
                else {
-                   new_cells[i][j] = Cell{
+                   g.current_cells[i + j*w] = Cell{
                        cell_type = cell.cell_type,
                        color = cell.color,
                    }
                }
         }
-        else if g.cells[i-1][j].cell_type == CELL_TYPE.EMPTY && g.cells[i+1][j].cell_type == CELL_TYPE.EMPTY {
-            if rand.float32() < 0.5 && new_cells[i-1][j].cell_type == CELL_TYPE.EMPTY {
-                new_cells[i][j] = Cell{
+        else if g.previous_cells[(i-1) + j*w].cell_type == CELL_TYPE.EMPTY && g.previous_cells[(i+1) + j*w].cell_type == CELL_TYPE.EMPTY {
+            if rand.float32() < 0.5 && g.current_cells[(i-1) + j*w].cell_type == CELL_TYPE.EMPTY {
+                g.current_cells[i + j*w] = Cell{
                     cell_type = CELL_TYPE.EMPTY,
                     color = rl.BLACK,
                 }
-                new_cells[i-1][j] = Cell{
+                g.current_cells[(i-1) + j*w] = Cell{
                     cell_type = cell.cell_type,
                     color = cell.color,
                 }
-            } else if new_cells[i+1][j].cell_type == CELL_TYPE.EMPTY  {
-                new_cells[i][j] = Cell{
+            } else if g.current_cells[(i+1) + j*w].cell_type == CELL_TYPE.EMPTY  {
+                g.current_cells[i + j*w] = Cell{
                     cell_type = CELL_TYPE.EMPTY,
                     color = rl.BLACK,
                 }
-                new_cells[i+1][j] = Cell{
+                g.current_cells[(i+1) + j*w] = Cell{
                     cell_type = cell.cell_type,
                     color = cell.color,
                 }
             } else {
-                new_cells[i][j] = Cell{
+                g.current_cells[i + j*w] = Cell{
                     cell_type = cell.cell_type,
                     color = cell.color,
                 }
             }
         }
-        else if g.cells[i-1][j].cell_type == CELL_TYPE.EMPTY && new_cells[i-1][j].cell_type == CELL_TYPE.EMPTY {
-            new_cells[i][j] = Cell{
+        else if g.previous_cells[(i-1) + j*w].cell_type == CELL_TYPE.EMPTY && g.current_cells[(i-1) + j*w].cell_type == CELL_TYPE.EMPTY {
+            g.current_cells[i + j*w] = Cell{
                 cell_type = CELL_TYPE.EMPTY,
                 color = rl.BLACK,
             }
-            new_cells[i-1][j] = Cell{
+            g.current_cells[(i-1) + j*w] = Cell{
                 cell_type = cell.cell_type,
                 color = cell.color,
             }
         }
-        else if g.cells[i+1][j].cell_type == CELL_TYPE.EMPTY {
-            new_cells[i][j] = Cell{
+        else if g.previous_cells[(i+1) + j*w].cell_type == CELL_TYPE.EMPTY {
+            g.current_cells[i + j*w] = Cell{
                 cell_type = CELL_TYPE.EMPTY,
                 color = rl.BLACK,
             }
-            new_cells[i+1][j] = Cell{
+            g.current_cells[(i+1) + j*w] = Cell{
                 cell_type = cell.cell_type,
                 color = cell.color,
             }
         }
         else {
-            new_cells[i][j] = Cell{
+            g.current_cells[i + j*w] = Cell{
                 cell_type = cell.cell_type,
                 color = cell.color,
             }
         } 
     } else {
-       new_cells[i][j] = Cell{
+       g.current_cells[i + j*w] = Cell{
            cell_type = cell.cell_type,
            color = cell.color,
        }
@@ -208,129 +214,142 @@ drop_water :: proc(g: ^Grid, new_cells : [][]Cell, cell : Cell, i,j :int){
 }
 
 sand_stickness : f32 = 0.5
-drop_sand :: proc(g: ^Grid, new_cells : [][]Cell, cell : Cell, i,j :int){
-    if j + 1 < g.height {
-        if g.cells[i][j+1].cell_type == CELL_TYPE.EMPTY ||  g.cells[i][j+1].cell_type == CELL_TYPE.WATER{
-            new_cells[i][j] = Cell{
+drop_sand :: proc(g: ^Grid, cell : Cell, i,j :int){
+    h := g.height
+    w := g.width
+    if j + 1 < h {
+        if g.previous_cells[i + (j+1)*w].cell_type == CELL_TYPE.EMPTY ||  g.previous_cells[i + j*w+1].cell_type == CELL_TYPE.WATER{
+            g.current_cells[i + j*w] = Cell{
                 cell_type = CELL_TYPE.EMPTY,
                 color = rl.BLACK,
             }
-            new_cells[i][j+1] = Cell{
+            g.current_cells[i + (j+1)*w] = Cell{
                 cell_type = cell.cell_type,
                 color = cell.color,
             }
         }
-        else if g.cells[i][j+1].cell_type == CELL_TYPE.SAND{
-            if g.cells[i-1][j+1].cell_type != CELL_TYPE.SAND && g.cells[i+1][j+1].cell_type != CELL_TYPE.SAND {
+        else if g.previous_cells[i + (j+1)*w].cell_type == CELL_TYPE.SAND{
+            if g.previous_cells[(i-1) +(j+1)*w].cell_type != CELL_TYPE.SAND && g.previous_cells[(i+1) + (j+1)*w].cell_type != CELL_TYPE.SAND {
                 if rand.float32() > sand_stickness {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = CELL_TYPE.EMPTY,
                         color = rl.BLACK,
                     }
                     if rand.float32() < 0.5 {
-                        new_cells[i-1][j+1] = Cell{
+                        g.current_cells[(i-1) +(j+1)*w] = Cell{
                             cell_type = cell.cell_type,
                             color = cell.color,
                         }
                     } else {
-                        new_cells[i+1][j+1] = Cell{
+                        g.current_cells[(i+1) + (j+1)*w] = Cell{
                             cell_type = cell.cell_type,
                             color = cell.color,
                         }
                     }
                 }
                 else {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = cell.cell_type,
                         color = cell.color,
                     }
                 }
             }
-            else if g.cells[i-1][j+1].cell_type != CELL_TYPE.SAND {
+            else if g.previous_cells[(i-1) +(j+1)*w].cell_type != CELL_TYPE.SAND {
                 if rand.float32() > sand_stickness {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = CELL_TYPE.EMPTY,
                         color = rl.BLACK,
                     }
-                    new_cells[i-1][j+1] = Cell{
+                    g.current_cells[(i-1) +(j+1)*w] = Cell{
                         cell_type = cell.cell_type,
                         color = cell.color,
                     }
                 }
                 else {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = cell.cell_type,
                         color = cell.color,
                     }
                 }
             }
-            else if g.cells[i+1][j+1].cell_type != CELL_TYPE.SAND {
+            else if g.previous_cells[(i+1) + (j+1)*w].cell_type != CELL_TYPE.SAND {
                 if rand.float32() < sand_stickness {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = CELL_TYPE.EMPTY,
                         color = rl.BLACK,
                     }
-                    new_cells[i+1][j+1] = Cell{
+                    g.current_cells[(i+1) + (j+1)*w] = Cell{
                         cell_type = cell.cell_type,
                         color = cell.color,
                     }
                 }
                 else {
-                    new_cells[i][j] = Cell{
+                    g.current_cells[i + j*w] = Cell{
                         cell_type = cell.cell_type,
                         color = cell.color,
                     }
                 }
             }
             else{
-                new_cells[i][j] = Cell{
+                g.current_cells[i + j*w] = Cell{
                     cell_type = cell.cell_type,
                     color = cell.color,
                 }
             }
         } 
     } else {
-        new_cells[i][j] = Cell{
+        g.current_cells[i + j*w] = Cell{
             cell_type = cell.cell_type,
             color = cell.color,
         }
     }
 }
 
+copy_particles :: proc(g : ^Grid) {
+    for i in 0..< g.width {
+        for j in 0..< g.height {
+            g.previous_cells[i + j*g.width] = g.current_cells[i + j*g.width]
+        }
+    }
+    //clear current cells
+    for i in 0..< g.width {
+        for j in 0..< g.height {
+            g.current_cells[i + j*g.width] = Cell{
+                cell_type = CELL_TYPE.EMPTY,
+                color = rl.BLACK,
+            }
+        }
+    }
+}
+
 
 drop_particle :: proc(g : ^Grid) {
-    new_cells := make([][]Cell, g.width)
-    for i in 0..< g.width {
-        new_cells[i] = make([]Cell, g.height)
-    }
-
-    
-    water_flow := rand.float32() 
-    for i in 1..< g.width -1 {
-        for j in 0..< g.height  {
-            cell := g.cells[i][j]
+    h := g.height
+    w := g.width
+    for i in 1..< w -1 {
+        for j in 0..< h  {
+            cell := g.previous_cells[i + j*w]
             if cell.cell_type == CELL_TYPE.WATER {
-                drop_water(g, new_cells, cell, i, j)
+                drop_water(g, cell, i, j)
             }
             else if cell.cell_type == CELL_TYPE.SAND {
-                drop_sand(g, new_cells, cell, i, j)
+                drop_sand(g, cell, i, j)
             }
         }
     }
     
-    for col in g.cells {
-        delete(col)
-    }
-    delete(g.cells)
-    g.cells = new_cells
+    copy_particles(g)
+
 }
 
 // Draw the grid
 Draw :: proc(g : ^Grid) {
     rl.DrawRectangle(i32(g.offset_pos.x), i32(g.offset_pos.y), i32(f32(g.width)*g.blockSize), i32(f32(g.height)*g.blockSize), rl.WHITE)
-    for i in 0..< g.width {
-        for j in 0..< g.height {
-            cell := g.cells[i][j]
+    h := g.height
+    w := g.width
+    for i in 0..< w {
+        for j in 0..< h {
+            cell := g.previous_cells[i + j*w]
             x := f32(i) * g.blockSize + g.offset_pos.x
             y := f32(j) * g.blockSize + g.offset_pos.y
             width := g.blockSize - 1
