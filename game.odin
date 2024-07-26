@@ -10,9 +10,9 @@ screen_height : i32 = 1000
 
 
 
-CELL_SIZE :: 2
-CELL_COUNT_X :: 500
-CELL_COUNT_Y :: 500
+CELL_SIZE :: 5
+CELL_COUNT_X :: 200
+CELL_COUNT_Y :: 200
 
 main :: proc()
 {

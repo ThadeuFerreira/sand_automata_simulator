@@ -59,17 +59,17 @@ Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f
 }
 
 fall_time : f32 = 0.0
-fall_speed : f32 = 1000
+fall_speed : f32 = 10000
 
 // Update the grid
 Update :: proc(g : ^Grid) {
 
     get_input(g)
     fall_time += rl.GetFrameTime()
-    if fall_time >= 1/g.fall_speed {
+    //if fall_time >= 1/g.fall_speed {
         drop_particle(g)
         fall_time = 0
-    }
+    //}
 
 }
 
