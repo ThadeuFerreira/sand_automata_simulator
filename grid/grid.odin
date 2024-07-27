@@ -32,10 +32,20 @@ CELL_TYPE :: enum {
     WATER,
 }
 
+PARTICLE_STATE :: enum {
+    FREE_FALL,
+    REST,
+    SLIDING,
+}
+
 Cell :: struct {
     cell_type: CELL_TYPE,
     color: rl.Color,
     updated: bool,
+    state: PARTICLE_STATE,
+    grav_potential: f32,
+    kinetic_energy: f32,
+    velocity_mod: int,
 }
 
 globalTimeCounter : f32 = 0.0
@@ -51,10 +61,7 @@ Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f
 
     current_cells := make([]Cell, width*height)
     previous_cells := make([]Cell, width*height)
-    // for i in 0..< width {
-    //     current_cells[i] = make([]Cell, height)
-    //     previous_cells[i] = make([]Cell, height)
-    // }
+
     g.fall_speed = fall_speed
 
     g.current_cells = current_cells
@@ -63,17 +70,17 @@ Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f
 }
 
 fall_time : f32 = 0.0
-fall_speed : f32 = 10000
+fall_speed : f32 = 100
 
 // Update the grid
 Update :: proc(g : ^Grid) {
 
     get_input(g)
     fall_time += rl.GetFrameTime()
-    //if fall_time >= 1/g.fall_speed {
+    if fall_time >= 1/g.fall_speed {
         drop_particle(g)
         fall_time = 0
-    //}
+    }
 
 }
 
@@ -95,6 +102,11 @@ get_input :: proc(g : ^Grid) {
             new_cell := Cell{
                 cell_type = CELL_TYPE.SAND,
                 color = new_sand_color,
+                state = PARTICLE_STATE.FREE_FALL,
+                updated = false,
+                grav_potential = f32(g.height - y),
+                kinetic_energy = 0,
+                velocity_mod = 1,
             }
             g.previous_cells[x + y*g.width] = new_cell
         }
@@ -214,95 +226,125 @@ drop_water :: proc(g: ^Grid, cell : Cell, i,j :int){
 }
 
 sand_stickness : f32 = 0.5
+gravity_acceleration : f32 = 9.8
 drop_sand :: proc(g: ^Grid, cell : Cell, i,j :int){
     h := g.height
     w := g.width
-    if j + 1 < h {
-        if g.previous_cells[i + (j+1)*w].cell_type == CELL_TYPE.EMPTY ||  g.previous_cells[i + j*w+1].cell_type == CELL_TYPE.WATER{
-            g.current_cells[i + j*w] = Cell{
-                cell_type = CELL_TYPE.EMPTY,
-                color = rl.BLACK,
-            }
-            g.current_cells[i + (j+1)*w] = Cell{
-                cell_type = cell.cell_type,
-                color = cell.color,
-            }
-        }
-        else if g.previous_cells[i + (j+1)*w].cell_type == CELL_TYPE.SAND{
-            if g.previous_cells[(i-1) +(j+1)*w].cell_type != CELL_TYPE.SAND && g.previous_cells[(i+1) + (j+1)*w].cell_type != CELL_TYPE.SAND {
-                if rand.float32() > sand_stickness {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = CELL_TYPE.EMPTY,
-                        color = rl.BLACK,
-                    }
-                    if rand.float32() < 0.5 {
-                        g.current_cells[(i-1) +(j+1)*w] = Cell{
-                            cell_type = cell.cell_type,
-                            color = cell.color,
-                        }
-                    } else {
-                        g.current_cells[(i+1) + (j+1)*w] = Cell{
-                            cell_type = cell.cell_type,
-                            color = cell.color,
-                        }
-                    }
-                }
-                else {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = cell.cell_type,
-                        color = cell.color,
-                    }
-                }
-            }
-            else if g.previous_cells[(i-1) +(j+1)*w].cell_type != CELL_TYPE.SAND {
-                if rand.float32() > sand_stickness {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = CELL_TYPE.EMPTY,
-                        color = rl.BLACK,
-                    }
-                    g.current_cells[(i-1) +(j+1)*w] = Cell{
-                        cell_type = cell.cell_type,
-                        color = cell.color,
-                    }
-                }
-                else {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = cell.cell_type,
-                        color = cell.color,
-                    }
-                }
-            }
-            else if g.previous_cells[(i+1) + (j+1)*w].cell_type != CELL_TYPE.SAND {
-                if rand.float32() < sand_stickness {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = CELL_TYPE.EMPTY,
-                        color = rl.BLACK,
-                    }
-                    g.current_cells[(i+1) + (j+1)*w] = Cell{
-                        cell_type = cell.cell_type,
-                        color = cell.color,
-                    }
-                }
-                else {
-                    g.current_cells[i + j*w] = Cell{
-                        cell_type = cell.cell_type,
-                        color = cell.color,
-                    }
-                }
-            }
-            else{
-                g.current_cells[i + j*w] = Cell{
-                    cell_type = cell.cell_type,
-                    color = cell.color,
-                }
-            }
-        } 
-    } else {
-        g.current_cells[i + j*w] = Cell{
-            cell_type = cell.cell_type,
-            color = cell.color,
+    kinetic_energy := cell.kinetic_energy
+    grav_potential := cell.grav_potential
+    velocity_mod := cell.velocity_mod
+    if cell.state != PARTICLE_STATE.REST{
+        kinetic_energy += 1
+        grav_potential -= 1
+        if int(kinetic_energy)%int(70/gravity_acceleration) == 0 { //Magic number to make the sand fall nicer
+            velocity_mod += 1
         }
     }
+
+    vm := cell.velocity_mod
+    for k := vm; k > 0; k -= 1 {
+        if j + k < h {
+            if g.previous_cells[i + (j+k)*w].cell_type == CELL_TYPE.EMPTY ||  g.previous_cells[i + j*w+1].cell_type == CELL_TYPE.WATER{
+                g.current_cells[i + j*w] = Cell{
+                    cell_type = CELL_TYPE.EMPTY,
+                    color = rl.BLACK,
+                }
+                g.current_cells[i + (j+k)*w] = cell
+                g.current_cells[i + (j+k)*w].kinetic_energy = kinetic_energy
+                g.current_cells[i + (j+k)*w].grav_potential = grav_potential
+                g.current_cells[i + (j+k)*w].velocity_mod = velocity_mod
+                g.current_cells[i + (j+k)*w].state = PARTICLE_STATE.FREE_FALL
+                break
+            }
+            else if g.previous_cells[i + (j+k)*w].cell_type == CELL_TYPE.SAND{
+                if g.previous_cells[(i-1) +(j+k)*w].cell_type != CELL_TYPE.SAND && g.previous_cells[(i+1) + (j+k)*w].cell_type != CELL_TYPE.SAND {
+                    if rand.float32() > sand_stickness {
+                        g.current_cells[i + j*w] = Cell{
+                            cell_type = CELL_TYPE.EMPTY,
+                            color = rl.BLACK,
+                        }
+                        if rand.float32() < 0.5 {
+                            g.current_cells[(i-1) +(j+k)*w] = cell
+                            g.current_cells[(i-1) +(j+k)*w].kinetic_energy = kinetic_energy
+                            g.current_cells[(i-1) +(j+k)*w].grav_potential = grav_potential
+                            g.current_cells[(i-1) +(j+k)*w].velocity_mod = velocity_mod
+                            g.current_cells[(i-1) +(j+k)*w].state = PARTICLE_STATE.SLIDING
+                        } else {
+                            g.current_cells[(i+1) + (j+k)*w] = cell
+                            g.current_cells[(i+1) + (j+k)*w].kinetic_energy = kinetic_energy
+                            g.current_cells[(i+1) + (j+k)*w].grav_potential = grav_potential
+                            g.current_cells[(i+1) + (j+k)*w].velocity_mod = velocity_mod
+                            g.current_cells[(i+1) + (j+k)*w].state = PARTICLE_STATE.SLIDING
+                        }
+                    }
+                    else {
+                        g.current_cells[i + j*w] = cell
+                        g.current_cells[i + j*w].kinetic_energy = 0
+                        g.current_cells[i + j*w].grav_potential = grav_potential
+                        g.current_cells[i + j*w].velocity_mod = velocity_mod
+                        g.current_cells[i + j*w].state = PARTICLE_STATE.REST
+                    }
+                    break
+                }
+                else if g.previous_cells[(i-1) +(j+k)*w].cell_type != CELL_TYPE.SAND {
+                    if rand.float32() > sand_stickness {
+                        g.current_cells[i + j*w] = Cell{
+                            cell_type = CELL_TYPE.EMPTY,
+                            color = rl.BLACK,
+                        }
+                        g.current_cells[(i-1) +(j+k)*w] = cell
+                        g.current_cells[(i-1) +(j+k)*w].kinetic_energy = kinetic_energy
+                        g.current_cells[(i-1) +(j+k)*w].grav_potential = grav_potential
+                        g.current_cells[(i-1) +(j+k)*w].velocity_mod = velocity_mod
+                        g.current_cells[(i-1) +(j+k)*w].state = PARTICLE_STATE.SLIDING
+                    }
+                    else {
+                        g.current_cells[i + j*w] = cell
+                        g.current_cells[i + j*w].kinetic_energy = 0
+                        g.current_cells[i + j*w].grav_potential = grav_potential
+                        g.current_cells[i + j*w].velocity_mod = velocity_mod
+                        g.current_cells[i + j*w].state = PARTICLE_STATE.REST
+                    }
+                    break
+                }
+                else if g.previous_cells[(i+1) + (j+k)*w].cell_type != CELL_TYPE.SAND {
+                    if rand.float32() < sand_stickness {
+                        g.current_cells[i + j*w] = Cell{
+                            cell_type = CELL_TYPE.EMPTY,
+                            color = rl.BLACK,
+                        }
+                        g.current_cells[(i+1) + (j+k)*w] = cell
+                        g.current_cells[(i+1) + (j+k)*w].kinetic_energy = kinetic_energy
+                        g.current_cells[(i+1) + (j+k)*w].grav_potential = grav_potential
+                        g.current_cells[(i+1) + (j+k)*w].velocity_mod = velocity_mod
+                        g.current_cells[(i+1) + (j+k)*w].state = PARTICLE_STATE.SLIDING
+                    }
+                    else {
+                        g.current_cells[i + j*w] = cell
+                        g.current_cells[i + j*w].kinetic_energy = 0
+                        g.current_cells[i + j*w].grav_potential = grav_potential
+                        g.current_cells[i + j*w].velocity_mod = velocity_mod
+                        g.current_cells[i + j*w].state = PARTICLE_STATE.REST
+                    }
+                    break
+                }
+                else if k == 1 {
+                    g.current_cells[i + j*w] = cell
+                    g.current_cells[i + j*w].kinetic_energy = 0
+                    g.current_cells[i + j*w].grav_potential = grav_potential
+                    g.current_cells[i + j*w].velocity_mod = velocity_mod
+                    g.current_cells[i + j*w].state = PARTICLE_STATE.REST
+                }
+            } 
+        } else if k == 1{
+            g.current_cells[i + j*w] = cell
+            g.current_cells[i + j*w].kinetic_energy = 0
+            g.current_cells[i + j*w].grav_potential = grav_potential
+            g.current_cells[i + j*w].velocity_mod = velocity_mod
+            g.current_cells[i + j*w].state = PARTICLE_STATE.REST
+        }
+    }
+    
 }
 
 copy_particles :: proc(g : ^Grid) {
