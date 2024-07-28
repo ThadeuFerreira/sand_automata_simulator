@@ -13,6 +13,7 @@ screen_height : i32 = 1000
 CELL_SIZE :: 5
 CELL_COUNT_X :: 200
 CELL_COUNT_Y :: 200
+BRUSH_SIZE :: 50
 
 main :: proc()
 {
@@ -23,6 +24,7 @@ main :: proc()
    gridInstance := grid.Make_Grid(
     CELL_COUNT_X,
     CELL_COUNT_Y,
+    f32(BRUSH_SIZE),
     gridOffset,
     CELL_SIZE,
     rl.BLACK,

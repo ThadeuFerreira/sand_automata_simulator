@@ -52,14 +52,14 @@ Cell :: struct {
 
 globalTimeCounter : f32 = 0.0
 
-Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f32,  backgroundColor: rl.Color) -> Grid {
+Make_Grid :: proc(width : int, height : int, brush_size : f32, offset_pos: rl.Vector2,blockSize: f32,  backgroundColor: rl.Color) -> Grid {
     g := Grid{
         width = width,
         height = height,
         blockSize = blockSize,
         offset_pos = offset_pos,
         backgroundColor = backgroundColor,
-        brush_radius = 5,
+        brush_radius = brush_size,
     }
 
     current_cells := make([]Cell, width*height)
@@ -118,6 +118,18 @@ get_input :: proc(g : ^Grid) {
             }
         }
     }
+    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
+        x := int((mouse_pos.x - g.offset_pos.x) / g.blockSize)
+        y := int((mouse_pos.y - g.offset_pos.y) / g.blockSize)
+        brush_radius := int(g.brush_radius/g.blockSize)
+        for i in -brush_radius..< brush_radius {
+            for j in -brush_radius..< brush_radius {
+                if i*i + j*j < brush_radius*brush_radius {
+                    destroy_cells(g, x+i, y+j)
+                }
+            }
+        }
+    }
     if rl.IsMouseButtonDown(rl.MouseButton.RIGHT) {
         x := int((mouse_pos.x - g.offset_pos.x) / g.blockSize)
         y := int((mouse_pos.y - g.offset_pos.y) / g.blockSize)
@@ -131,6 +143,17 @@ get_input :: proc(g : ^Grid) {
     }
     
    
+}
+
+destroy_cells :: proc(g: ^Grid, x,y :int) {
+    h := g.height
+    w := g.width
+    if x >= 0 && x < w && y >= 0 && y < h {
+        g.current_cells[x + y*w] = Cell{
+            cell_type = CELL_TYPE.EMPTY,
+            color = rl.BLACK,
+        }
+    }
 }
 
 generate_sand_at :: proc(g: ^Grid, x,y :int) {
@@ -258,14 +281,14 @@ drop_sand :: proc(g: ^Grid, cell : Cell, i,j :int){
     kinetic_energy := cell.kinetic_energy
     grav_potential := cell.grav_potential
     velocity_mod := cell.velocity_mod
-    if cell.state != PARTICLE_STATE.REST{
-        kinetic_energy += 1
-        grav_potential -= 1
-        if int(kinetic_energy)%int(70/gravity_acceleration) == 0 { //Magic number to make the sand fall nicer
-            velocity_mod += 1
-        }
+    if cell.state == PARTICLE_STATE.REST{
+        return
     }
-
+    kinetic_energy += 1
+    grav_potential -= 1
+    if int(kinetic_energy)%int(70/gravity_acceleration) == 0 { //Magic number to make the sand fall nicer
+        velocity_mod += 1
+    }
     vm := cell.velocity_mod
     for k := vm; k > 0; k -= 1 {
         if j + k < h {
@@ -378,12 +401,26 @@ copy_particles :: proc(g : ^Grid) {
             g.previous_cells[i + j*g.width] = g.current_cells[i + j*g.width]
         }
     }
-    //clear current cells
-    for i in 0..< g.width {
-        for j in 0..< g.height {
-            g.current_cells[i + j*g.width] = Cell{
-                cell_type = CELL_TYPE.EMPTY,
-                color = rl.BLACK,
+}
+
+particle_slickness : f32 = 0.3
+update_empty_cells :: proc(g : ^Grid, cell : Cell, i,j :int) {
+    h := g.height
+    w := g.width
+    if j > 0 && j < h {
+        g.current_cells[i + (j-1)*w].state = PARTICLE_STATE.FREE_FALL 
+    }
+    if i > 0 {
+        if g.current_cells[(i-1) + j*w].cell_type == CELL_TYPE.SAND {
+            if rand.float32() < particle_slickness {
+                g.current_cells[(i-1) + j*w].state = PARTICLE_STATE.SLIDING
+            }
+        }
+    }
+    if i < w - 1 {
+        if g.current_cells[(i+1) + j*w].cell_type == CELL_TYPE.SAND {
+            if rand.float32() < particle_slickness {
+                g.current_cells[(i+1) + j*w].state = PARTICLE_STATE.SLIDING
             }
         }
     }
@@ -402,11 +439,20 @@ drop_particle :: proc(g : ^Grid) {
             else if cell.cell_type == CELL_TYPE.SAND {
                 drop_sand(g, cell, i, j)
             }
+            else if cell.cell_type == CELL_TYPE.EMPTY {
+                update_empty_cells(g, cell, i, j)
+            }
         }
     }
     
     copy_particles(g)
 
+}
+
+CELL_STATE_COLORS :: []rl.Color{
+    rl.BLACK,
+    rl.RED,
+    rl.BLUE,
 }
 
 // Draw the grid
@@ -428,6 +474,8 @@ Draw :: proc(g : ^Grid) {
             color := rl.BLACK
             if cell.cell_type != CELL_TYPE.EMPTY {
                 color = cell.color
+            } else {
+                color = cell.state == PARTICLE_STATE.FREE_FALL ? rl.BLACK: rl.DARKGRAY
             }
             rl.DrawRectangle(i32(f32(i) * g.blockSize + g.offset_pos.x), i32(f32(j) * g.blockSize + g.offset_pos.y), i32(g.blockSize), i32(g.blockSize), color)
         }
