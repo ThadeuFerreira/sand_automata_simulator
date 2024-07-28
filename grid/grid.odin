@@ -24,6 +24,8 @@ Grid :: struct {
 
     backgroundColor: rl.Color,
     fall_speed: f32,
+
+    brush_radius: f32,
 }
 
 CELL_TYPE :: enum {
@@ -57,6 +59,7 @@ Make_Grid :: proc(width : int, height : int, offset_pos: rl.Vector2,blockSize: f
         blockSize = blockSize,
         offset_pos = offset_pos,
         backgroundColor = backgroundColor,
+        brush_radius = 5,
     }
 
     current_cells := make([]Cell, width*height)
@@ -90,25 +93,29 @@ new_sand_color : rl.Color = rl.GOLD
 get_input :: proc(g : ^Grid) {
     mouse_pos := rl.GetMousePosition()
     color_change_time += rl.GetFrameTime()
+
+    g.brush_radius += rl.GetMouseWheelMove()
+    g.brush_radius = math.clamp(g.brush_radius, 1, 100) //clamp brush radius to 1-100
+    
     if color_change_time >= color_change_interval {
         sand_color_list := SAND_COLOR_LIST
         new_sand_color = sand_color_list[rand.int_max(len(SAND_COLOR_LIST))]
         color_change_time = 0
     }
+
     if rl.IsMouseButtonDown(rl.MouseButton.LEFT) {
         x := int((mouse_pos.x - g.offset_pos.x) / g.blockSize)
         y := int((mouse_pos.y - g.offset_pos.y) / g.blockSize)
-        if x >= 0 && x < g.width && y >= 0 && y < g.height {
-            new_cell := Cell{
-                cell_type = CELL_TYPE.SAND,
-                color = new_sand_color,
-                state = PARTICLE_STATE.FREE_FALL,
-                updated = false,
-                grav_potential = f32(g.height - y),
-                kinetic_energy = 0,
-                velocity_mod = 1,
+        brush_radius := int(g.brush_radius/g.blockSize)
+        brush_density :f32 = 0.3
+        for i in -brush_radius..< brush_radius {
+            for j in -brush_radius..< brush_radius {
+                if i*i + j*j < brush_radius*brush_radius {
+                    if rand.float32() < brush_density {
+                        generate_sand_at(g, x+i, y+j)
+                    }
+                }
             }
-            g.previous_cells[x + y*g.width] = new_cell
         }
     }
     if rl.IsMouseButtonDown(rl.MouseButton.RIGHT) {
@@ -121,6 +128,24 @@ get_input :: proc(g : ^Grid) {
             }
             g.previous_cells[x + y*g.width] = new_cell
         }
+    }
+    
+   
+}
+
+generate_sand_at :: proc(g: ^Grid, x,y :int) {
+    
+    if x >= 0 && x < g.width && y >= 0 && y < g.height {
+        new_cell := Cell{
+            cell_type = CELL_TYPE.SAND,
+            color = new_sand_color,
+            state = PARTICLE_STATE.FREE_FALL,
+            updated = false,
+            grav_potential = f32(g.height - y),
+            kinetic_energy = 0,
+            velocity_mod = 1,
+        }
+        g.previous_cells[x + y*g.width] = new_cell
     }
 }
 
@@ -387,6 +412,10 @@ drop_particle :: proc(g : ^Grid) {
 // Draw the grid
 Draw :: proc(g : ^Grid) {
     rl.DrawRectangle(i32(g.offset_pos.x), i32(g.offset_pos.y), i32(f32(g.width)*g.blockSize), i32(f32(g.height)*g.blockSize), rl.WHITE)
+    mouse_pos := rl.GetMousePosition()
+    m_x := i32(mouse_pos.x - g.offset_pos.x)
+    m_y := i32(mouse_pos.y - g.offset_pos.y)
+    
     h := g.height
     w := g.width
     for i in 0..< w {
@@ -403,4 +432,5 @@ Draw :: proc(g : ^Grid) {
             rl.DrawRectangle(i32(f32(i) * g.blockSize + g.offset_pos.x), i32(f32(j) * g.blockSize + g.offset_pos.y), i32(g.blockSize), i32(g.blockSize), color)
         }
     }
+    rl.DrawCircleLines(m_x, m_y,g.brush_radius, rl.WHITE)
 }
