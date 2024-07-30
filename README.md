@@ -18,4 +18,6 @@ Mouse Wheel to change the brush size
 
 Space Bar to destroy the sand under the mouse position
 
-<img width="498" alt="2024-07-24 22_05_21-grid odin - Untitled (Workspace) - Visual Studio Code" src="https://github.com/user-attachments/assets/522ad7cd-f5e5-47ee-92ca-7ff5f59b1a19">
+
+https://github.com/user-attachments/assets/491646e0-8f3d-410b-bedb-c4df56062ccd
+
